@@ -3,6 +3,7 @@ library(tidyverse)
 library(tidygraph)
 library(ggraph)
 library(ggthemes)
+library(showtext)
 
 llm_print <- function(obj, n = 10, clipboard = FALSE) {
   # 1. Take the head
@@ -94,59 +95,93 @@ crm_graph <- crm_graph %>%
   )
 
 
+################ Visual Code Here
 
 
-# 6. Visualize (S-Tier D3 & FiveThirtyEight Inspired Version)
+library(showtext)
 
-p <- ggraph(crm_graph, layout = "fr") +
+# 1. Load the S-Tier Fonts
+font_add_google("Montserrat", "title_font")   # High-impact for titles
+font_add_google("Fira Mono", "mono_font")     # Clean monospace for table names
+showtext_auto()
+
+# 2. Build the Plot with Distinct Visual Layers
+p_final <- ggraph(crm_graph, layout = 'fr') + 
+  
+  # --- LAYER 1: BACKGROUND NOISE ---
   geom_edge_arc(
     aes(filter = !is_hub_edge),
-    strength = 0.35, alpha = 0.05, edge_width = 0.2, color = "#8b8b8b",
+    strength = 0.35, 
+    alpha = 0.05, 
+    edge_width = 0.2, 
+    color = "#8b8b8b",
     show.legend = FALSE
   ) +
+  
+  # --- LAYER 2: THE TOPOLOGY (Bolder & Darker) ---
   geom_edge_arc(
     aes(filter = is_hub_edge),
     strength = 0.35,
-    arrow = arrow(length = unit(2.5, "mm"), type = "closed", angle = 20),
-    start_cap = circle(4, "mm"),
-    end_cap = circle(5, "mm"),
-    alpha = 0.45, edge_width = 0.8, color = "#5a5a5a",
+    arrow = arrow(length = unit(2.5, 'mm'), type = "closed", angle = 20),
+    start_cap = circle(4, 'mm'),
+    end_cap = circle(5, 'mm'),
+    alpha = 0.65,              # BOLDER: Increased opacity
+    edge_width = 0.9,          # BOLDER: Thicker lines
+    color = "#2b2b2b",         # BOLDER: Very dark slate/almost black
     show.legend = FALSE
   ) +
+  
+  # --- LAYER 3: THE NODES ---
   geom_node_point(
     aes(color = IS_HUB, size = COUNT_INWARD_CONNECTIONS),
-    alpha = 0.9, show.legend = FALSE
+    alpha = 0.9, 
+    show.legend = FALSE
   ) +
+  
+  # --- LAYER 4: THE LABELS (Monospace & Dotted Pointers) ---
   geom_node_text(
-    aes(label = ifelse(IS_HUB, name, NA), fontface = "bold"),
-    repel = TRUE, force = 15, box.padding = 1.5, point.padding = 1,
-    max.overlaps = Inf, size = 4.5, color = "#222222",
-    na.rm = TRUE, show.legend = FALSE
+    aes(label = ifelse(IS_HUB, name, NA)),
+    family = "mono_font",        # Monospace font
+    repel = TRUE, 
+    force = 25,                  
+    box.padding = 1.5, 
+    point.padding = 1.0,
+    size = 2.6,                  # Smaller, receding into the background
+    color = "#6b6b6b",           # Medium-light gray
+    max.overlaps = Inf,
+    
+    # CRITICAL FIX: Make the repel lines distinctly NOT network edges
+    segment.color = "#d3d3d3",   # Very light gray pointer line
+    segment.size = 0.3,          # Very thin
+    segment.linetype = "dotted", # Dotted so it cannot be mistaken for a solid data edge
+    
+    show.legend = FALSE
   ) +
+  
+  # --- STYLING & THEME ---
   scale_color_manual(values = c("FALSE" = "#30a2da", "TRUE" = "#fc4f30")) +
-  scale_size_continuous(range = c(1.5, 10)) +
+  scale_size_continuous(range = c(2, 12)) + 
   theme_fivethirtyeight() +
   theme(
     legend.position = "none",
     panel.grid = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    plot.title = element_text(face = "bold", size = 18),
-    plot.subtitle = element_text(size = 12, color = "#666666", margin = margin(b = 15)),
-    plot.background = element_rect(fill = "#F0F0F0", color = NA)
+    plot.title = element_text(family = "title_font", face = "bold", size = 22, color = "#111111"),
+    plot.subtitle = element_text(family = "title_font", size = 12, color = "#555555", margin = margin(b = 20)),
+    plot.background = element_rect(fill = "#F4F4F4", color = NA) # Very subtle off-white
   ) +
   labs(
-    title = "CRM Schema Dependency Architecture",
-    subtitle = "Highlighting central data hubs (red) and their inbound directional flow."
+    title = "CRM SCHEMA DEPENDENCY ARCHITECTURE",
+    subtitle = "Strategic Data Hubs (Red) and Inbound Referential Flow"
   )
 
-# 2. Export to Letter Sized Horizontal PDF
-# US Letter Landscape is 11 x 8.5 inches
+# 3. Export High-Fidelity PDF
 ggsave(
-  filename = "CRM_Schema_Architecture.pdf",
-  plot = p,
-  device = "pdf",
-  width = 11,
-  height = 8.5,
+  filename = "CRM_Architecture_STier.pdf", 
+  plot = p_final, 
+  device = cairo_pdf,   # cairo_pdf handles custom fonts and alpha transparency exceptionally well on Linux
+  width = 11, 
+  height = 8.5, 
   units = "in"
 )
