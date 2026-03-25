@@ -91,43 +91,63 @@ crm_graph <- crm_graph %>%
     is_hub_edge = .N()$IS_HUB[from] | .N()$IS_HUB[to]
   )
 
-# 6. Visualize (Reduced Overplotting Version)
+
+
+
+# 6. Visualize (S-Tier D3 & FiveThirtyEight Inspired Version)
+
 ggraph(crm_graph, layout = 'fr') + 
   
-  # 1. EDGES: Dynamic transparency and thickness
+  # --- LAYER 1: BACKGROUND EDGES (The Noise) ---
+  # Faint, sweeping, no arrows. Just to provide structural context.
   geom_edge_arc(
-    aes(alpha = is_hub_edge, edge_width = is_hub_edge),
-    arrow = arrow(length = unit(1.5, 'mm'), type = "closed"), 
+    aes(filter = !is_hub_edge),   # Only draw non-hub connections here
+    strength = 0.35,              # Increased curve for a more organic, hand-drawn feel
+    alpha = 0.05,                 # Barely visible
+    edge_width = 0.2,
     color = "#8b8b8b",
-    strength = 0.15,
     show.legend = FALSE
   ) +
-  # Make Hub connections dark and thick; background connections faint and thin
-  scale_edge_alpha_manual(values = c("TRUE" = 0.6, "FALSE" = 0.05)) +
-  scale_edge_width_manual(values = c("TRUE" = 0.8, "FALSE" = 0.2)) +
   
-  # 2. NODES
+  # --- LAYER 2: FOREGROUND EDGES (The Signal) ---
+  # Thicker, darker, distinctly curved, and equipped with directional arrows.
+  geom_edge_arc(
+    aes(filter = is_hub_edge),    # Only draw the critical Hub paths
+    strength = 0.35,              # Match the sweeping curve
+    arrow = arrow(length = unit(2.5, 'mm'), type = "closed", angle = 20),
+    start_cap = circle(4, 'mm'),  # Prevents lines from starting inside the source node
+    end_cap = circle(5, 'mm'),    # Stops the arrowhead right BEFORE the target node
+    alpha = 0.45,                 # Bold enough to see, transparent enough to prevent blocking
+    edge_width = 0.8,
+    color = "#5a5a5a",            # Darker gray for contrast against the blue/red nodes
+    show.legend = FALSE
+  ) +
+  
+  # --- LAYER 3: THE NODES ---
   geom_node_point(
     aes(color = IS_HUB, size = COUNT_INWARD_CONNECTIONS),
     alpha = 0.9,
     show.legend = FALSE
   ) +
   
-  # 3. TEXT: Only print labels for HUBs to kill the clutter
+  # --- LAYER 4: THE LABELS (Extreme Repel) ---
   geom_node_text(
     aes(
-      # If it's a hub, print the name. If not, return NA (ggrepel ignores NAs).
       label = ifelse(IS_HUB, name, NA), 
       fontface = "bold"
     ),
     repel = TRUE,
-    size = 4,
+    force = 15,                   # Multiplier for the repulsion physics (pushes labels far apart)
+    box.padding = 1.5,            # Creates a larger invisible forcefield around the text box
+    point.padding = 1,            # Forces the label to sit further away from its parent node
+    max.overlaps = Inf,           # Forces ggrepel to NEVER hide a hub label
+    size = 4.5,
     color = "#222222",
-    na.rm = TRUE,            # Prevents warnings about missing labels
+    na.rm = TRUE,
     show.legend = FALSE
   ) +
   
-  # 4. STYLING
+  # --- STYLING & THEME ---
   scale_color_manual(values = c("FALSE" = "#30a2da", "TRUE" = "#fc4f30")) +
   scale_size_continuous(range = c(1.5, 10)) + 
   theme_fivethirtyeight() +
@@ -136,10 +156,18 @@ ggraph(crm_graph, layout = 'fr') +
     panel.grid = element_blank(),
     axis.text = element_blank(),
     axis.ticks = element_blank(),
-    plot.title = element_text(face = "bold", size = 16)
+    plot.title = element_text(face = "bold", size = 18),
+    plot.subtitle = element_text(size = 12, color = "#666666", margin = margin(b = 15)),
+    plot.background = element_rect(fill = "#F0F0F0", color = NA) # True 538 background color
   ) +
   labs(
     title = "CRM Schema Dependency Architecture",
-    subtitle = "Highlighting core data hubs and their direct dependencies."
+    subtitle = "Highlighting central data hubs (red) and their inbound directional flow."
   )
+
+
+
+
+
+
 
