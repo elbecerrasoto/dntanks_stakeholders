@@ -3,6 +3,9 @@ library(readxl)
 library(ggthemes)
 library(tidyverse)
 library(rlang)
+library(scales)
+
+OUTPUT <- "output/all_profile02.tsv"
 
 RATE_FILL_CUTOFF <- 0.02
 ENTROPY_CUTOFF <- 0.0
@@ -115,9 +118,6 @@ x <- x |>
 
 x <- should_migrate_heuristic(x)
 
-# x |>
-#   write_tsv("output/all_profile02.tsv")
-
 plot_elbow_cutoff(x, RATE_FILL, cutoff = RATE_FILL_CUTOFF)
 plot_elbow_cutoff(x, ENTROPY, cutoff = ENTROPY_CUTOFF)
 
@@ -167,3 +167,9 @@ ggplot(y, aes(x = RATE_FILL, y = ENTROPY, color = Category)) +
   ) +
   annotate("label", x = 0.8, y = 0.1, label = "Dense but Monotonous\n(Check for Defaults)", size = 3) +
   annotate("label", x = 0.8, y = 0.9, label = "High Value Data\n(Rich & Complete)", size = 3, fill = "#008fd5", color = "white")
+
+
+
+# write data --------------------------------------------------------------
+
+x |> write_tsv(OUTPUT)
