@@ -29,10 +29,12 @@ llm_print <- function(obj, n = 10, clipboard = FALSE) {
 tables <- readxl::read_excel("output/tabs_profile.xlsx") %>%
   rename(OUTWARD_CONNECTIONS = LIST_TABLES_POINTED)
 
+# --- 1. PREP NODES ---
 nodes <- tables %>%
-  select(name = NAME_TABLE) %>%
+  select(name = NAME_TABLE, TYPE_TABLE) %>% # <-- ADDED TYPE_TABLE HERE
   filter(!is.na(name), name != "NA", name != "") %>%
-  distinct()
+  distinct(name, .keep_all = TRUE) # Ensure no duplicates break the graph
+
 
 edges <- tables %>%
   select(from = NAME_TABLE, to_list = OUTWARD_CONNECTIONS) %>%
@@ -80,3 +82,5 @@ crm_graph <- crm_graph %>%
 
 cat("Graph computed successfully. Sourcing visual script...\n")
 source("viz_schema.R")
+
+# write_tsv("output/tabs_profile_network_info.tsv")
