@@ -143,7 +143,7 @@ y <- x |>
 
 
 
-# Interesting Viz ----------------------------------------------------------
+# Scatter of cols ----------------------------------------------------------
 
 ggplot(y, aes(x = RATE_FILL, y = ENTROPY, color = Category)) +
   geom_point(alpha = 0.6, size = 3) +
@@ -167,7 +167,6 @@ ggplot(y, aes(x = RATE_FILL, y = ENTROPY, color = Category)) +
   ) +
   annotate("label", x = 0.8, y = 0.1, label = "Dense but Monotonous\n(Check for Defaults)", size = 3) +
   annotate("label", x = 0.8, y = 0.9, label = "High Value Data\n(Rich & Complete)", size = 3, fill = "#008fd5", color = "white")
-
 
 
 # write data --------------------------------------------------------------
