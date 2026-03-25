@@ -2,6 +2,7 @@
 library(tidyverse)
 library(tidygraph)
 library(ggraph)
+library(ggthemes)
 
 llm_print <- function(obj, n = 10, clipboard = FALSE) {
   # 1. Take the head
@@ -68,93 +69,77 @@ valid_edges <- edges %>%
 crm_graph <- tbl_graph(nodes = nodes, edges = valid_edges, directed = TRUE)
 
 
+# Global threshold for easy tuning (Lower = more hubs. 0.80 = Top 20%)
+HUB_QUANTILE_THRESHOLD <- 0.80
 
-
-
-# 4. Calculate Network Metrics inside the Graph
+# 4. Calculate Network Metrics & Edge Properties
 crm_graph <- crm_graph %>%
+  activate(nodes) %>%
   mutate(
     COUNT_INWARD_CONNECTIONS = centrality_degree(mode = "in"),
     COUNT_OUTWARD_CONNECTIONS = centrality_degree(mode = "out"),
-    # Calculate Hubs and Authorities
-    hub_score = centrality_hub(),
-    authority_score = centrality_authority(),
-    # Flag as HUB if it's in the top 5% of hub scores (adjust threshold as needed)
-    IS_HUB = hub_score > quantile(hub_score, 0.95, na.rm = TRUE),
-    # Optional: Betweenness to find bridge tables
-    betweenness = centrality_betweenness()
+    score_hub = centrality_hub(),
+    
+    # Flag HUBs based on the global variable
+    IS_HUB = score_hub >= quantile(score_hub, HUB_QUANTILE_THRESHOLD, na.rm = TRUE)
+  ) %>%
+  # Switch focus to edges to figure out which lines connect to a HUB
+  activate(edges) %>%
+  mutate(
+    # .N() accesses the node data from within the edge context.
+    # This checks if either the source (from) OR target (to) is a HUB.
+    is_hub_edge = .N()$IS_HUB[from] | .N()$IS_HUB[to]
   )
 
-# 5. Extract metrics and join back to your main tibble
-node_metrics <- crm_graph %>% as_tibble()
-
-final_tables <- tables %>%
-  left_join(node_metrics, by = c("NAME_TABLE" = "name"))
-
-
-  
-  
-  # 6. Visualize the DAG (Stakeholder & D3-Inspired Version)
-  
-  # Load ggthemes for the FiveThirtyEight aesthetic
-  # install.packages("ggthemes")
-  library(ggthemes)
-
-# 'fr' (Fruchterman-Reingold) is a force-directed layout. 
-# Unlike 'sugiyama' (which draws rigid, bipartite-like layers), 
-# 'fr' acts like gravity: connected nodes pull together, unlinked nodes push apart.
-# This gives it that organic, clustered D3.js feel.
+# 6. Visualize (Reduced Overplotting Version)
 ggraph(crm_graph, layout = 'fr') + 
   
-  # 1. ROUNDED EDGES: Swap straight lines for gentle arcs. 
-  # This softens the graph and makes complex web crossings easier on the eyes.
+  # 1. EDGES: Dynamic transparency and thickness
   geom_edge_arc(
+    aes(alpha = is_hub_edge, edge_width = is_hub_edge),
     arrow = arrow(length = unit(1.5, 'mm'), type = "closed"), 
-    alpha = 0.15,            # Highly transparent edges so they don't overpower nodes
-    color = "#8b8b8b",       # Neutral grey for edges
-    strength = 0.15          # A subtle curve (1.0 would be a full semi-circle)
+    color = "#8b8b8b",
+    strength = 0.15,
+    show.legend = FALSE
   ) +
+  # Make Hub connections dark and thick; background connections faint and thin
+  scale_edge_alpha_manual(values = c("TRUE" = 0.6, "FALSE" = 0.05)) +
+  scale_edge_width_manual(values = c("TRUE" = 0.8, "FALSE" = 0.2)) +
   
-  # 2. NODES: We map size to incoming connections and color to the HUB flag.
+  # 2. NODES
   geom_node_point(
     aes(color = IS_HUB, size = COUNT_INWARD_CONNECTIONS),
     alpha = 0.9,
-    show.legend = FALSE      # Drops the legends completely (Size & Color)
-  ) +
-  
-  # 3. TEXT & CROWD CONTROL: ggrepel handles text overlapping automatically.
-  # We make HUB nodes BOLD and slightly larger so they instantly grab attention.
-  geom_node_text(
-    aes(
-      label = name,
-      fontface = ifelse(IS_HUB, "bold", "plain") # Make Hubs stand out text-wise
-    ),
-    repel = TRUE,            # Prevents text collision
-    size = 3.5,
-    color = "#333333",       # Dark grey text (easier to read than pure black)
-    max.overlaps = 15,       # If an area is overwhelmingly crowded, it safely hides minor labels
     show.legend = FALSE
   ) +
   
-  # 4. SCALING & COLORS: FiveThirtyEight inspired palette
-  # Regular nodes are a calm blue, Hubs are an aggressive alert red/orange.
-  scale_color_manual(values = c("FALSE" = "#30a2da", "TRUE" = "#fc4f30")) +
-  # Force the nodes to stay within a reasonable min/max size radius
-  scale_size_continuous(range = c(2, 12)) + 
-  
-  # 5. THEME: Apply the clean, journalistic FiveThirtyEight theme
-  theme_fivethirtyeight() +
-  theme(
-    legend.position = "none",              # Double-ensure no legends appear
-    panel.grid = element_blank(),          # Remove background grid lines
-    axis.text = element_blank(),           # Hide axis coordinates
-    axis.ticks = element_blank(),          # Hide axis ticks
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(size = 11, color = "#666666", margin = margin(b = 15))
+  # 3. TEXT: Only print labels for HUBs to kill the clutter
+  geom_node_text(
+    aes(
+      # If it's a hub, print the name. If not, return NA (ggrepel ignores NAs).
+      label = ifelse(IS_HUB, name, NA), 
+      fontface = "bold"
+    ),
+    repel = TRUE,
+    size = 4,
+    color = "#222222",
+    na.rm = TRUE,            # Prevents warnings about missing labels
+    show.legend = FALSE
   ) +
   
-  # 6. TITLES: Speak directly to the stakeholder's interests
+  # 4. STYLING
+  scale_color_manual(values = c("FALSE" = "#30a2da", "TRUE" = "#fc4f30")) +
+  scale_size_continuous(range = c(1.5, 10)) + 
+  theme_fivethirtyeight() +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    plot.title = element_text(face = "bold", size = 16)
+  ) +
   labs(
     title = "CRM Schema Dependency Architecture",
-    subtitle = "Highlighting central data hubs (red) and their inbound dependency volume."
+    subtitle = "Highlighting core data hubs and their direct dependencies."
   )
+
