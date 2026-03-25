@@ -125,86 +125,45 @@ suggest_cutoff_elbow(x, RATE_FILL)
 suggest_cutoff_elbow(x, ENTROPY)
 
 
-if (F) {
-  # Intresting Viz ----------------------------------------------------------
 
-
-
-
-  library(ggthemes)
-
-  # Create a quadrant identifier for the plot
-  plot_data <- x |>
-    mutate(
-      Action = ifelse(SHOULD_MIGRATE_COL, "Migrate", "Archive"),
-      Category = case_when(
-        IS_KEY ~ "System Key (Auto-Migrate)",
-        TRUE ~ Action
-      )
+# Apply migration logic
+y <- x |>
+  mutate(
+    SHOULD_MIGRATE_COL = case_when(
+      IS_KEY ~ TRUE,
+      (RATE_FILL >= RATE_FILL_CUTOFF) & (ENTROPY >= ENTROPY_CUTOFF) ~ TRUE,
+      TRUE ~ FALSE
+    ),
+    Action = ifelse(SHOULD_MIGRATE_COL, "Migrate", "Archive"),
+    Category = case_when(
+      IS_KEY ~ "System Key (Auto-Migrate)",
+      TRUE ~ Action
     )
-
-  ggplot(plot_data, aes(x = RATE_FILL, y = RATE_DOMINANT, color = Category)) +
-    geom_point(alpha = 0.7, size = 3) +
-    geom_vline(xintercept = RATE_FILL_CUTOFF, linetype = "dashed", color = "black") +
-    geom_hline(yintercept = RATE_DOMINANT_CUTOFF, linetype = "dashed", color = "black") +
-    scale_color_manual(values = c(
-      "Archive" = "#ff2700",
-      "Migrate" = "#008fd5",
-      "System Key (Auto-Migrate)" = "#77ab43"
-    )) +
-    theme_fivethirtyeight() +
-    theme(axis.title = element_text()) +
-    labs(
-      title = "Which Columns Make the Cut?",
-      subtitle = "Balancing data density against variability.",
-      x = "Fill Rate (Higher is better)",
-      y = "Dominance Rate (Lower is better)",
-      color = "Decision"
-    ) +
-    annotate("text", x = 0.8, y = 0.2, label = "High Value Data\n(Dense & Varied)", fontface = "bold") +
-    annotate("text", x = 0.1, y = 0.9, label = "Low Value Data\n(Sparse & Static)", fontface = "bold")
+  )
 
 
-  library(dplyr)
-  library(ggplot2)
-  library(forcats)
 
-  # Prepare data: order tables by their average fill rate
-  genomic_data <- x |>
-    group_by(NAME_TABLE) |>
-    mutate(Avg_Table_Fill = mean(RATE_FILL, na.rm = TRUE)) |>
-    ungroup() |>
-    mutate(NAME_TABLE = fct_reorder(NAME_TABLE, Avg_Table_Fill, .desc = TRUE)) |>
-    arrange(NAME_TABLE) |>
-    mutate(Global_Index = row_number()) # Create continuous x-axis across all tables
+# Interesting Viz ----------------------------------------------------------
 
-  # Calculate midpoints for table labels on the x-axis
-  axis_set <- genomic_data |>
-    group_by(NAME_TABLE) |>
-    summarize(center = mean(Global_Index))
-
-  # Alternating colors for the "chromosomes" (tables)
-  genomic_data <- genomic_data |>
-    mutate(Color_Group = as.numeric(NAME_TABLE) %% 2)
-
-  ggplot(genomic_data, aes(x = Global_Index, y = RATE_FILL)) +
-    geom_jitter(aes(color = as.factor(Color_Group), size = RATE_DOMINANT), alpha = 0.6, width = 0.4) +
-    scale_color_manual(values = c("#1f77b4", "#aec7e8")) + # Classic D3/Genomic alternating colors
-    scale_size_continuous(range = c(4, 1), name = "Variance (Smaller = More Static)") +
-    scale_x_continuous(label = axis_set$NAME_TABLE, breaks = axis_set$center) +
-    geom_hline(yintercept = RATE_FILL_CUTOFF, linetype = "dashed", color = "red") +
-    theme_minimal() +
-    theme(
-      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8),
-      panel.grid.major.x = element_blank(),
-      panel.grid.minor.x = element_blank(),
-      legend.position = "bottom"
-    ) +
-    labs(
-      title = "Data Topology: The Manhattan Plot",
-      subtitle = "Each cluster is a CRM Table. Points above the red line are candidates for migration.",
-      x = "CRM Tables (Ordered by Overall Health)",
-      y = "Column Fill Rate"
-    ) +
-    guides(color = "none") # Hide the alternating color legend
-}
+ggplot(y, aes(x = RATE_FILL, y = ENTROPY, color = Category)) +
+  geom_point(alpha = 0.6, size = 3) +
+  # Dynamic Cutoff Lines
+  geom_vline(xintercept = RATE_FILL_CUTOFF, linetype = "dashed", color = "black", alpha = 0.5) +
+  geom_hline(yintercept = ENTROPY_CUTOFF, linetype = "dashed", color = "black", alpha = 0.5) +
+  scale_color_manual(values = c(
+    "Archive" = "#ff2700", # Red
+    "Migrate" = "#008fd5", # Blue
+    "System Key (Auto-Migrate)" = "#77ab43" # Green
+  )) +
+  theme_fivethirtyeight() +
+  theme(axis.title = element_text(face = "bold")) +
+  labs(
+    title = "Migration Selection Framework",
+    subtitle = paste0("Calculated cutoffs: Fill > ", percent(RATE_FILL_CUTOFF), 
+                      " | Entropy > ", percent(ENTROPY_CUTOFF)),
+    x = "Fill Rate (Completeness)",
+    y = "Entropy (Information Variety)",
+    color = "Decision"
+  ) +
+  annotate("label", x = 0.8, y = 0.1, label = "Dense but Monotonous\n(Check for Defaults)", size = 3) +
+  annotate("label", x = 0.8, y = 0.9, label = "High Value Data\n(Rich & Complete)", size = 3, fill = "#008fd5", color = "white")
